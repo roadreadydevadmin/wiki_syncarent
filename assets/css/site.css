@@ -1,0 +1,145 @@
+:root {
+    --wiki-bg: #e7f0ef;
+    --wiki-main-bg: #f4f8f7;
+    --wiki-sidebar-start: #0e4d58;
+    --wiki-sidebar-end: #08363e;
+    --wiki-brand: #f9c75d;
+    --wiki-text: #102a43;
+    --wiki-muted: #486581;
+    --wiki-card-shadow: 0 16px 32px rgba(13, 43, 54, 0.12);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at top right, #ffffff 0%, var(--wiki-bg) 48%, #d8e7e3 100%);
+    color: var(--wiki-text);
+    font-family: "Manrope", "Segoe UI", Tahoma, sans-serif;
+}
+
+.wiki-shell {
+    min-height: 100vh;
+}
+
+.wiki-sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    background: linear-gradient(165deg, var(--wiki-sidebar-start), var(--wiki-sidebar-end));
+    color: #f2faf8;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wiki-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    color: inherit;
+}
+
+.wiki-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    padding: 0.4rem;
+}
+
+.wiki-brand-name {
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.wiki-brand-tagline {
+    color: rgba(242, 250, 248, 0.76);
+    font-size: 0.76rem;
+    letter-spacing: 0.03em;
+}
+
+.wiki-nav-section + .wiki-nav-section {
+    margin-top: 1.25rem;
+}
+
+.wiki-section-title {
+    color: var(--wiki-brand);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    margin-bottom: 0.65rem;
+}
+
+.wiki-nav-link {
+    display: block;
+    border-radius: 0.55rem;
+    padding: 0.45rem 0.65rem;
+    color: rgba(242, 250, 248, 0.88);
+    font-size: 0.92rem;
+    text-decoration: none;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.wiki-nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    transform: translateX(2px);
+}
+
+.wiki-nav-link.active {
+    background-color: rgba(249, 199, 93, 0.2);
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.wiki-main {
+    flex: 1;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 24%);
+}
+
+.wiki-title {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: clamp(1.8rem, 2vw, 2.5rem);
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.wiki-description {
+    max-width: 70ch;
+    color: var(--wiki-muted);
+}
+
+.wiki-article {
+    background: #ffffff;
+    border-radius: 1rem;
+    box-shadow: var(--wiki-card-shadow);
+    padding: clamp(1.25rem, 1.5vw, 2rem);
+}
+
+.wiki-article h2,
+.wiki-article h3 {
+    margin-top: 1.5rem;
+    font-family: "Source Serif 4", Georgia, serif;
+}
+
+.wiki-article h2:first-child,
+.wiki-article h3:first-child {
+    margin-top: 0;
+}
+
+.wiki-article code {
+    background-color: #f3f8f8;
+    border-radius: 0.35rem;
+    color: #0b5f66;
+    padding: 0.15rem 0.35rem;
+}
+
+@media (max-width: 767.98px) {
+    .wiki-sidebar {
+        width: 100%;
+    }
+}
+
