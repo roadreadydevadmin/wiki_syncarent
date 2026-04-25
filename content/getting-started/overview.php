@@ -1,4 +1,9 @@
 <?php
+if (!defined('WIKI_BOOTSTRAPPED')) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 $pageMeta = [
     'title' => 'Getting Started',
     'description' => 'How to add pages and organize sections in this wiki.',
@@ -22,4 +27,3 @@ $pageMeta = [
         <li>`content/releases/*.php` appears under <strong>Releases</strong>.</li>
     </ul>
 </section>
-

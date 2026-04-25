@@ -1,4 +1,9 @@
 <?php
+if (!defined('WIKI_BOOTSTRAPPED')) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 $pageMeta = [
     'title' => 'Release Notes',
     'description' => 'Public changelog pages. Add one file per release in this folder.',
@@ -20,4 +25,3 @@ $pageMeta = [
         <code>vX-X-X-short-release-name.php</code>
     </p>
 </section>
-

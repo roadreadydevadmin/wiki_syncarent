@@ -1,4 +1,9 @@
 <?php
+if (!defined('WIKI_BOOTSTRAPPED')) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 $pageMeta = [
     'title' => 'v1.0.0 - Initial Public Starter',
     'description' => 'First public wiki release with navigation, sections, and release-note support.',
@@ -21,4 +26,3 @@ $pageMeta = [
         Use this page as the baseline format for future release pages.
     </p>
 </section>
-

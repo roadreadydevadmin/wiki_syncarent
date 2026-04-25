@@ -1,4 +1,9 @@
 <?php
+if (!defined('WIKI_BOOTSTRAPPED')) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 $pageMeta = [
     'title' => 'Welcome to Syncarent Wiki',
     'description' => 'Central documentation hub for public-facing product knowledge and release communication.',
@@ -39,4 +44,3 @@ $pageMeta = [
         </div>
     </div>
 </section>
-

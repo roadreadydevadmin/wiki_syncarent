@@ -35,17 +35,18 @@ body {
 
 .wiki-brand {
     display: flex;
-    align-items: center;
-    gap: 0.85rem;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.65rem;
     color: inherit;
 }
 
 .wiki-logo {
-    width: 44px;
-    height: 44px;
+    width: min(210px, 100%);
+    height: auto;
     border-radius: 0.75rem;
     background: #ffffff;
-    padding: 0.4rem;
+    padding: 0.45rem 0.6rem;
 }
 
 .wiki-brand-name {
@@ -58,6 +59,13 @@ body {
     color: rgba(242, 250, 248, 0.76);
     font-size: 0.76rem;
     letter-spacing: 0.03em;
+}
+
+.wiki-sidebar-actions .btn {
+    --bs-btn-border-color: rgba(255, 255, 255, 0.5);
+    --bs-btn-hover-border-color: rgba(255, 255, 255, 0.9);
+    --bs-btn-color: #f2faf8;
+    --bs-btn-hover-color: #ffffff;
 }
 
 .wiki-nav-section + .wiki-nav-section {
@@ -142,4 +150,3 @@ body {
         width: 100%;
     }
 }
-
