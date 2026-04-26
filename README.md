@@ -1,6 +1,6 @@
 # Syncarent Wiki Starter
 
-Public-facing wiki built with PHP and Bootstrap, protected behind a password gate and now backed by MySQL for releases/features.
+Public-facing wiki built with PHP and Bootstrap, protected behind a password gate and backed by MySQL for releases, features, help docs, and admin auth.
 
 ## Quick Start
 
@@ -36,8 +36,12 @@ Public-facing wiki built with PHP and Bootstrap, protected behind a password gat
   - `WIKI_DB_NAME`
   - `WIKI_DB_USER`
   - `WIKI_DB_PASS`
+  - `WIKI_ADMIN_DEFAULT_EMAIL`
+  - `WIKI_ADMIN_DEFAULT_NAME`
+  - `WIKI_ADMIN_DEFAULT_PASSWORD`
+  - `WIKI_ADMIN_UPLOAD_MAX_MB`
 
-## Apache `.htaccess` DB Credentials
+## Apache `.htaccess` Environment Values
 
 - `.htaccess` now includes example `SetEnv` values for:
   - `WIKI_DB_HOST`
@@ -80,3 +84,25 @@ Public-facing wiki built with PHP and Bootstrap, protected behind a password gat
 - If there are more than 10, an `Older Releases` link appears and supports pagination.
 - Each release has its own URL format: `?page=releases/<release-slug>`.
 - Feature assets (GIF/video/image files) should be stored under `assets/releases/` and referenced via `features.asset_path`.
+
+## Help Docs
+
+- Help docs are database-driven using `help_docs` (`title`, `status`, `slug`, `html_content`).
+- Published docs are listed under a `Help Docs` section in the left sidebar.
+- Each help doc has its own URL format: `?page=help/<doc-slug>`.
+
+## Admin Portal
+
+- Admin portal URL: `/admin/index.php`.
+- Auth tables:
+  - `admin_users` (stores `password_hash` created via PHP `password_hash()`).
+  - `admin_sessions` (tracks active admin logins).
+- On first bootstrap (when no admin users exist), a default admin user is created from:
+  - `WIKI_ADMIN_DEFAULT_EMAIL`
+  - `WIKI_ADMIN_DEFAULT_NAME`
+  - `WIKI_ADMIN_DEFAULT_PASSWORD`
+- Portal features:
+  - Create releases and attach features.
+  - Create features with optional asset upload.
+  - Create help docs.
+  - Upload assets into `assets/<folder>/YYYY/MM/...` via GUI.

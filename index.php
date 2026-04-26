@@ -40,24 +40,25 @@ function wiki_safe_redirect_target(string $candidate): string
     return $path . $query;
 }
 
-function wiki_replace_release_section_pages(array $sections, array $releasePages): array
+function wiki_replace_section_pages(array $sections, string $sectionKey, string $sectionLabel, array $pages): array
 {
-    if (count($releasePages) === 0) {
+    if (count($pages) === 0) {
         return $sections;
     }
 
     foreach ($sections as &$section) {
-        if (($section['key'] ?? '') === 'releases') {
-            $section['pages'] = $releasePages;
+        if (($section['key'] ?? '') === $sectionKey) {
+            $section['pages'] = $pages;
+            $section['label'] = $sectionLabel;
             return $sections;
         }
     }
     unset($section);
 
     $sections[] = [
-        'key' => 'releases',
-        'label' => 'Releases',
-        'pages' => $releasePages,
+        'key' => $sectionKey,
+        'label' => $sectionLabel,
+        'pages' => $pages,
     ];
 
     return $sections;
@@ -182,6 +183,19 @@ function wiki_render_older_releases_content(array $olderReleases, int $currentPa
     return (string) ob_get_clean();
 }
 
+function wiki_render_help_doc_content(array $helpDoc): string
+{
+    ob_start();
+    ?>
+    <section>
+        <p class="text-secondary mb-3"><?= htmlspecialchars(wiki_release_date_label($helpDoc['created_at'] ?? null), ENT_QUOTES, 'UTF-8') ?></p>
+        <?= (string) ($helpDoc['html_content'] ?? '') ?>
+    </section>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
 session_name('syncarent_wiki_session');
 session_start();
 
@@ -259,8 +273,10 @@ $sections = wiki_discover_pages(__DIR__ . '/content');
 $recentReleaseLimit = 10;
 $recentReleasePageSize = 25;
 $recentReleases = wiki_db_fetch_published_releases($recentReleaseLimit, 0);
+$publishedHelpDocs = wiki_db_fetch_published_help_docs(200, 0);
 $totalPublishedReleases = wiki_db_count_published_releases();
 $releaseNavPages = [];
+$helpNavPages = [];
 
 foreach ($recentReleases as $releaseRow) {
     if (!isset($releaseRow['slug'], $releaseRow['header'])) {
@@ -285,7 +301,24 @@ if ($totalPublishedReleases > $recentReleaseLimit) {
     ];
 }
 
-$sections = wiki_replace_release_section_pages($sections, $releaseNavPages);
+foreach ($publishedHelpDocs as $helpDocRow) {
+    if (!isset($helpDocRow['slug'], $helpDocRow['title'])) {
+        continue;
+    }
+
+    $helpSlug = (string) $helpDocRow['slug'];
+    if ($helpSlug === '') {
+        continue;
+    }
+
+    $helpNavPages[] = [
+        'slug' => 'help/' . $helpSlug,
+        'title' => (string) $helpDocRow['title'],
+    ];
+}
+
+$sections = wiki_replace_section_pages($sections, 'releases', 'Releases', $releaseNavPages);
+$sections = wiki_replace_section_pages($sections, 'help', 'Help Docs', $helpNavPages);
 $defaultSlug = wiki_default_slug($sections) ?? '';
 
 $rawPage = isset($_GET['page']) ? (string) $_GET['page'] : '';
@@ -295,8 +328,13 @@ if ($requestedSlug === 'releases/index' && isset($recentReleases[0]['slug'])) {
     $requestedSlug = 'releases/' . (string) $recentReleases[0]['slug'];
 }
 
+if ($requestedSlug === 'help/index' && isset($publishedHelpDocs[0]['slug'])) {
+    $requestedSlug = 'help/' . (string) $publishedHelpDocs[0]['slug'];
+}
+
 $pageNotFound = $rawPage !== '' && $requestedSlug === '';
 $resolvedRelease = null;
+$resolvedHelpDoc = null;
 $showOlderReleasesPage = false;
 
 $currentPage = $requestedSlug !== '' ? wiki_find_page($sections, $requestedSlug) : null;
@@ -319,6 +357,18 @@ if ($requestedSlug === 'releases/older') {
             ];
         }
     }
+} elseif (str_starts_with($requestedSlug, 'help/')) {
+    $helpSlug = substr($requestedSlug, strlen('help/'));
+
+    if ($helpSlug !== '' && !str_contains($helpSlug, '/')) {
+        $resolvedHelpDoc = wiki_db_fetch_published_help_doc_by_slug($helpSlug);
+        if ($resolvedHelpDoc !== null) {
+            $currentPage = [
+                'slug' => 'help/' . $helpSlug,
+                'title' => (string) ($resolvedHelpDoc['title'] ?? 'Help Doc'),
+            ];
+        }
+    }
 }
 
 if ($currentPage === null && $defaultSlug !== '') {
@@ -338,6 +388,10 @@ if ($resolvedRelease !== null) {
     $pageTitle = (string) ($resolvedRelease['header'] ?? 'Release');
     $pageDescription = 'Release details and attached features.';
     $pageContent = wiki_render_release_content($resolvedRelease, $features);
+} elseif ($resolvedHelpDoc !== null) {
+    $pageTitle = (string) ($resolvedHelpDoc['title'] ?? 'Help Doc');
+    $pageDescription = 'Help documentation.';
+    $pageContent = wiki_render_help_doc_content($resolvedHelpDoc);
 } elseif ($showOlderReleasesPage) {
     $olderPageRaw = isset($_GET['older_page']) ? (string) $_GET['older_page'] : '1';
     $olderPage = ctype_digit($olderPageRaw) ? max(1, (int) $olderPageRaw) : 1;

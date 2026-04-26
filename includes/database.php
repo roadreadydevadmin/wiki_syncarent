@@ -65,6 +65,7 @@ function wiki_db_bootstrap(string $schemaPath): void
         $pdo = new PDO($dbDsn, $user, $pass, $pdoOptions);
 
         wiki_apply_schema_file($pdo, $schemaPath);
+        wiki_db_ensure_default_admin($pdo);
         wiki_set_db_state($pdo, null);
     } catch (Throwable $exception) {
         wiki_set_db_state(null, $exception->getMessage());
@@ -245,4 +246,371 @@ function wiki_db_fetch_release_features(int $releaseId): array
     $statement->execute(['release_id' => $releaseId]);
 
     return $statement->fetchAll();
+}
+
+function wiki_db_fetch_published_help_docs(int $limit = 200, int $offset = 0): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $safeLimit = max(1, min(500, $limit));
+    $safeOffset = max(0, $offset);
+    $statement = $pdo->prepare(
+        "SELECT id, title, status, slug, html_content, created_at, updated_at
+         FROM help_docs
+         WHERE status = 'publish'
+         ORDER BY created_at DESC, id DESC
+         LIMIT :limit OFFSET :offset"
+    );
+    $statement->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
+    $statement->bindValue(':offset', $safeOffset, PDO::PARAM_INT);
+    $statement->execute();
+
+    return $statement->fetchAll();
+}
+
+function wiki_db_fetch_published_help_doc_by_slug(string $slug): ?array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $slug === '') {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        "SELECT id, title, status, slug, html_content, created_at, updated_at
+         FROM help_docs
+         WHERE status = 'publish' AND slug = :slug
+         LIMIT 1"
+    );
+    $statement->execute(['slug' => $slug]);
+    $doc = $statement->fetch();
+
+    return is_array($doc) ? $doc : null;
+}
+
+function wiki_db_fetch_all_features(): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $statement = $pdo->query(
+        'SELECT id, header, slug, asset_path, created_at, updated_at
+         FROM features
+         ORDER BY created_at DESC, id DESC'
+    );
+
+    return $statement->fetchAll();
+}
+
+function wiki_db_create_feature(string $header, string $slug, string $htmlContent, ?string $assetPath): int
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $statement = $pdo->prepare(
+        'INSERT INTO features (header, slug, html_content, asset_path)
+         VALUES (:header, :slug, :html_content, :asset_path)'
+    );
+    $statement->execute([
+        'header' => $header,
+        'slug' => $slug,
+        'html_content' => $htmlContent !== '' ? $htmlContent : null,
+        'asset_path' => $assetPath !== null && $assetPath !== '' ? $assetPath : null,
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
+
+function wiki_db_create_release(string $header, string $status, string $slug, string $htmlContent): int
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $safeStatus = $status === 'publish' ? 'publish' : 'draft';
+    $statement = $pdo->prepare(
+        'INSERT INTO releases (header, status, slug, html_content)
+         VALUES (:header, :status, :slug, :html_content)'
+    );
+    $statement->execute([
+        'header' => $header,
+        'status' => $safeStatus,
+        'slug' => $slug,
+        'html_content' => $htmlContent !== '' ? $htmlContent : null,
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
+
+function wiki_db_replace_release_features(int $releaseId, array $featureIds): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $pdo->beginTransaction();
+
+    try {
+        $deleteStatement = $pdo->prepare('DELETE FROM release_features WHERE release_id = :release_id');
+        $deleteStatement->execute(['release_id' => $releaseId]);
+
+        if (count($featureIds) > 0) {
+            $insertStatement = $pdo->prepare(
+                'INSERT INTO release_features (release_id, feature_id, display_order)
+                 VALUES (:release_id, :feature_id, :display_order)'
+            );
+            $order = 1;
+            foreach ($featureIds as $featureId) {
+                $featureIdInt = (int) $featureId;
+                if ($featureIdInt <= 0) {
+                    continue;
+                }
+                $insertStatement->execute([
+                    'release_id' => $releaseId,
+                    'feature_id' => $featureIdInt,
+                    'display_order' => $order,
+                ]);
+                $order++;
+            }
+        }
+
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
+function wiki_db_create_help_doc(string $title, string $status, string $slug, string $htmlContent): int
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $safeStatus = $status === 'publish' ? 'publish' : 'draft';
+    $statement = $pdo->prepare(
+        'INSERT INTO help_docs (title, status, slug, html_content)
+         VALUES (:title, :status, :slug, :html_content)'
+    );
+    $statement->execute([
+        'title' => $title,
+        'status' => $safeStatus,
+        'slug' => $slug,
+        'html_content' => $htmlContent !== '' ? $htmlContent : null,
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
+
+function wiki_db_fetch_recent_releases_for_admin(int $limit = 20): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $safeLimit = max(1, min(100, $limit));
+    $statement = $pdo->prepare(
+        'SELECT id, header, status, slug, created_at
+         FROM releases
+         ORDER BY created_at DESC, id DESC
+         LIMIT :limit'
+    );
+    $statement->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
+    $statement->execute();
+
+    return $statement->fetchAll();
+}
+
+function wiki_db_fetch_recent_features_for_admin(int $limit = 20): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $safeLimit = max(1, min(100, $limit));
+    $statement = $pdo->prepare(
+        'SELECT id, header, slug, asset_path, created_at
+         FROM features
+         ORDER BY created_at DESC, id DESC
+         LIMIT :limit'
+    );
+    $statement->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
+    $statement->execute();
+
+    return $statement->fetchAll();
+}
+
+function wiki_db_fetch_recent_help_docs_for_admin(int $limit = 20): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $safeLimit = max(1, min(100, $limit));
+    $statement = $pdo->prepare(
+        'SELECT id, title, status, slug, created_at
+         FROM help_docs
+         ORDER BY created_at DESC, id DESC
+         LIMIT :limit'
+    );
+    $statement->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
+    $statement->execute();
+
+    return $statement->fetchAll();
+}
+
+function wiki_db_fetch_admin_user_by_email(string $email): ?array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        'SELECT id, email, display_name, password_hash, is_active, last_login_at, created_at, updated_at
+         FROM admin_users
+         WHERE LOWER(email) = LOWER(:email)
+         LIMIT 1'
+    );
+    $statement->execute(['email' => trim($email)]);
+    $user = $statement->fetch();
+
+    return is_array($user) ? $user : null;
+}
+
+function wiki_db_mark_admin_last_login(int $adminUserId): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+
+    $statement = $pdo->prepare('UPDATE admin_users SET last_login_at = NOW() WHERE id = :id');
+    $statement->execute(['id' => $adminUserId]);
+}
+
+function wiki_db_create_admin_session(int $adminUserId, string $tokenHash, string $expiresAt): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $statement = $pdo->prepare(
+        'INSERT INTO admin_sessions (admin_user_id, token_hash, expires_at, last_seen_at)
+         VALUES (:admin_user_id, :token_hash, :expires_at, NOW())'
+    );
+    $statement->execute([
+        'admin_user_id' => $adminUserId,
+        'token_hash' => $tokenHash,
+        'expires_at' => $expiresAt,
+    ]);
+}
+
+function wiki_db_fetch_admin_session_user(string $tokenHash): ?array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $tokenHash === '') {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        'SELECT s.id AS session_id, s.admin_user_id, s.expires_at, s.last_seen_at,
+                u.id, u.email, u.display_name, u.is_active, u.last_login_at
+         FROM admin_sessions s
+         INNER JOIN admin_users u ON u.id = s.admin_user_id
+         WHERE s.token_hash = :token_hash
+           AND s.expires_at > NOW()
+           AND u.is_active = 1
+         LIMIT 1'
+    );
+    $statement->execute(['token_hash' => $tokenHash]);
+    $row = $statement->fetch();
+
+    return is_array($row) ? $row : null;
+}
+
+function wiki_db_touch_admin_session(int $sessionId): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+
+    $statement = $pdo->prepare('UPDATE admin_sessions SET last_seen_at = NOW() WHERE id = :id');
+    $statement->execute(['id' => $sessionId]);
+}
+
+function wiki_db_delete_admin_session(string $tokenHash): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $tokenHash === '') {
+        return;
+    }
+
+    $statement = $pdo->prepare('DELETE FROM admin_sessions WHERE token_hash = :token_hash');
+    $statement->execute(['token_hash' => $tokenHash]);
+}
+
+function wiki_db_delete_expired_admin_sessions(): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+
+    $pdo->exec('DELETE FROM admin_sessions WHERE expires_at <= NOW()');
+}
+
+function wiki_db_ensure_default_admin(PDO $pdo): void
+{
+    $count = $pdo->query('SELECT COUNT(*) FROM admin_users')->fetchColumn();
+    if (is_numeric($count) && (int) $count > 0) {
+        return;
+    }
+
+    $email = trim(strtolower(wiki_env('WIKI_ADMIN_DEFAULT_EMAIL', 'admin@syncarent.local')));
+    $displayName = trim(wiki_env('WIKI_ADMIN_DEFAULT_NAME', 'Admin'));
+    $password = wiki_env('WIKI_ADMIN_DEFAULT_PASSWORD', 'ChangeMe123!');
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $email = 'admin@syncarent.local';
+    }
+
+    if ($displayName === '') {
+        $displayName = 'Admin';
+    }
+
+    if (strlen($password) < 8) {
+        $password = 'ChangeMe123!';
+    }
+
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+    if (!is_string($passwordHash) || $passwordHash === '') {
+        throw new RuntimeException('Unable to hash default admin password.');
+    }
+
+    $statement = $pdo->prepare(
+        'INSERT INTO admin_users (email, display_name, password_hash, is_active)
+         VALUES (:email, :display_name, :password_hash, 1)'
+    );
+    $statement->execute([
+        'email' => $email,
+        'display_name' => $displayName,
+        'password_hash' => $passwordHash,
+    ]);
 }

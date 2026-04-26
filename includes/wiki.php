@@ -108,9 +108,9 @@ function wiki_discover_pages(string $contentDir): array
     uksort(
         $sections,
         static function (string $a, string $b): int {
-            $priority = ['general' => 0, 'releases' => 1];
-            $aPriority = $priority[$a] ?? 2;
-            $bPriority = $priority[$b] ?? 2;
+            $priority = ['general' => 0, 'releases' => 1, 'help' => 2];
+            $aPriority = $priority[$a] ?? 3;
+            $bPriority = $priority[$b] ?? 3;
 
             if ($aPriority !== $bPriority) {
                 return $aPriority <=> $bPriority;
@@ -179,4 +179,3 @@ function wiki_render_page(string $path): array
         'content' => $content,
     ];
 }
-
