@@ -102,7 +102,7 @@ Public-facing wiki built with PHP and Bootstrap, protected behind a password gat
   - `WIKI_ADMIN_DEFAULT_NAME`
   - `WIKI_ADMIN_DEFAULT_PASSWORD`
 - Portal features:
-  - Create releases and attach features.
-  - Create features with optional asset upload.
-  - Create help docs.
+  - Create and edit releases (including attached feature mapping).
+  - Create and edit features with optional asset upload.
+  - Create and edit help docs.
   - Upload assets into `assets/<folder>/YYYY/MM/...` via GUI.

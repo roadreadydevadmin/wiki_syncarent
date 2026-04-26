@@ -10,21 +10,35 @@ wiki_load_env(dirname(__DIR__) . '/.env');
 wiki_db_bootstrap(dirname(__DIR__) . '/database/schema.sql');
 wiki_admin_start_session();
 
+function wiki_admin_positive_int_from_query(string $key): int
+{
+    $raw = isset($_GET[$key]) ? (string) $_GET[$key] : '';
+    if (!ctype_digit($raw)) {
+        return 0;
+    }
+
+    $value = (int) $raw;
+    return $value > 0 ? $value : 0;
+}
+
+function wiki_admin_redirect(string $url = 'index.php'): void
+{
+    header('Location: ' . $url);
+    exit;
+}
+
 $dbError = wiki_db_error();
 $siteName = wiki_env('WIKI_SITE_NAME', 'Syncarent Wiki');
-$flashes = wiki_admin_take_flashes();
 $loginError = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'logout') {
     if (!wiki_admin_validate_csrf(isset($_POST['csrf_token']) ? (string) $_POST['csrf_token'] : null)) {
         wiki_admin_set_flash('danger', 'Invalid security token. Please try again.');
-        header('Location: index.php');
-        exit;
+        wiki_admin_redirect('index.php');
     }
 
     wiki_admin_logout();
-    header('Location: index.php');
-    exit;
+    wiki_admin_redirect('index.php');
 }
 
 $adminUser = wiki_admin_current_user();
@@ -37,8 +51,7 @@ if ($adminUser === null) {
         );
 
         if (($login['ok'] ?? false) === true) {
-            header('Location: index.php');
-            exit;
+            wiki_admin_redirect('index.php');
         }
 
         $loginError = is_string($login['error'] ?? null) ? $login['error'] : 'Unable to log in.';
@@ -95,11 +108,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $token = isset($_POST['csrf_token']) ? (string) $_POST['csrf_token'] : null;
     if (!wiki_admin_validate_csrf($token)) {
         wiki_admin_set_flash('danger', 'Invalid security token. Please refresh and try again.');
-        header('Location: index.php');
-        exit;
+        wiki_admin_redirect('index.php');
     }
 
     $action = (string) $_POST['action'];
+    $redirectUrl = 'index.php';
 
     try {
         if ($action === 'upload_asset') {
@@ -114,12 +127,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
 
             wiki_admin_set_flash('success', 'Asset uploaded: ' . (string) ($upload['path'] ?? ''));
-        } elseif ($action === 'create_feature') {
+        } elseif ($action === 'create_feature' || $action === 'edit_feature') {
+            $isEdit = $action === 'edit_feature';
+            $featureId = isset($_POST['feature_id']) ? (int) $_POST['feature_id'] : 0;
+            if ($isEdit && $featureId > 0) {
+                $redirectUrl = 'index.php?edit_feature=' . $featureId . '#edit-feature';
+            }
             $header = trim((string) ($_POST['feature_header'] ?? ''));
             $slugInput = trim((string) ($_POST['feature_slug'] ?? ''));
             $slug = $slugInput !== '' ? wiki_admin_slugify($slugInput) : wiki_admin_slugify($header);
             $html = (string) ($_POST['feature_html'] ?? '');
             $assetPath = trim((string) ($_POST['feature_asset_path'] ?? ''));
+            $removeAsset = isset($_POST['feature_remove_asset']) && $_POST['feature_remove_asset'] === '1';
+
+            $existingFeature = null;
+            if ($isEdit) {
+                if ($featureId <= 0) {
+                    throw new RuntimeException('Invalid feature ID.');
+                }
+                $existingFeature = wiki_db_fetch_feature_by_id($featureId);
+                if ($existingFeature === null) {
+                    throw new RuntimeException('Feature not found.');
+                }
+                if ($assetPath === '' && isset($existingFeature['asset_path']) && is_string($existingFeature['asset_path'])) {
+                    $assetPath = (string) $existingFeature['asset_path'];
+                }
+            }
 
             if (isset($_FILES['feature_asset_file']) && is_array($_FILES['feature_asset_file'])) {
                 $fileError = (int) ($_FILES['feature_asset_file']['error'] ?? UPLOAD_ERR_NO_FILE);
@@ -132,6 +165,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 }
             }
 
+            if ($removeAsset) {
+                $assetPath = '';
+            }
+
             if ($header === '') {
                 throw new RuntimeException('Feature header is required.');
             }
@@ -139,9 +176,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 throw new RuntimeException('Feature slug is required.');
             }
 
-            wiki_db_create_feature($header, $slug, $html, $assetPath !== '' ? $assetPath : null);
-            wiki_admin_set_flash('success', 'Feature created: ' . $header);
-        } elseif ($action === 'create_release') {
+            if ($isEdit) {
+                wiki_db_update_feature($featureId, $header, $slug, $html, $assetPath !== '' ? $assetPath : null);
+                wiki_admin_set_flash('success', 'Feature updated: ' . $header);
+                $redirectUrl = 'index.php?edit_feature=' . $featureId . '#edit-feature';
+            } else {
+                $newFeatureId = wiki_db_create_feature($header, $slug, $html, $assetPath !== '' ? $assetPath : null);
+                wiki_admin_set_flash('success', 'Feature created: ' . $header);
+                $redirectUrl = 'index.php?edit_feature=' . $newFeatureId . '#edit-feature';
+            }
+        } elseif ($action === 'create_release' || $action === 'edit_release') {
+            $isEdit = $action === 'edit_release';
+            $releaseId = isset($_POST['release_id']) ? (int) $_POST['release_id'] : 0;
+            if ($isEdit && $releaseId > 0) {
+                $redirectUrl = 'index.php?edit_release=' . $releaseId . '#edit-release';
+            }
             $header = trim((string) ($_POST['release_header'] ?? ''));
             $slugInput = trim((string) ($_POST['release_slug'] ?? ''));
             $slug = $slugInput !== '' ? wiki_admin_slugify($slugInput) : wiki_admin_slugify($header);
@@ -157,10 +206,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 throw new RuntimeException('Release slug is required.');
             }
 
-            $releaseId = wiki_db_create_release($header, $status, $slug, $html);
-            wiki_db_replace_release_features($releaseId, $featureIds);
-            wiki_admin_set_flash('success', 'Release created: ' . $header);
-        } elseif ($action === 'create_help_doc') {
+            if ($isEdit) {
+                if ($releaseId <= 0 || wiki_db_fetch_release_by_id($releaseId) === null) {
+                    throw new RuntimeException('Release not found.');
+                }
+                wiki_db_update_release($releaseId, $header, $status, $slug, $html);
+                wiki_db_replace_release_features($releaseId, $featureIds);
+                wiki_admin_set_flash('success', 'Release updated: ' . $header);
+                $redirectUrl = 'index.php?edit_release=' . $releaseId . '#edit-release';
+            } else {
+                $newReleaseId = wiki_db_create_release($header, $status, $slug, $html);
+                wiki_db_replace_release_features($newReleaseId, $featureIds);
+                wiki_admin_set_flash('success', 'Release created: ' . $header);
+                $redirectUrl = 'index.php?edit_release=' . $newReleaseId . '#edit-release';
+            }
+        } elseif ($action === 'create_help_doc' || $action === 'edit_help_doc') {
+            $isEdit = $action === 'edit_help_doc';
+            $helpDocId = isset($_POST['doc_id']) ? (int) $_POST['doc_id'] : 0;
+            if ($isEdit && $helpDocId > 0) {
+                $redirectUrl = 'index.php?edit_doc=' . $helpDocId . '#edit-doc';
+            }
             $title = trim((string) ($_POST['doc_title'] ?? ''));
             $slugInput = trim((string) ($_POST['doc_slug'] ?? ''));
             $slug = $slugInput !== '' ? wiki_admin_slugify($slugInput) : wiki_admin_slugify($title);
@@ -174,8 +239,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 throw new RuntimeException('Doc slug is required.');
             }
 
-            wiki_db_create_help_doc($title, $status, $slug, $html);
-            wiki_admin_set_flash('success', 'Help doc created: ' . $title);
+            if ($isEdit) {
+                if ($helpDocId <= 0 || wiki_db_fetch_help_doc_by_id($helpDocId) === null) {
+                    throw new RuntimeException('Help doc not found.');
+                }
+                wiki_db_update_help_doc($helpDocId, $title, $status, $slug, $html);
+                wiki_admin_set_flash('success', 'Help doc updated: ' . $title);
+                $redirectUrl = 'index.php?edit_doc=' . $helpDocId . '#edit-doc';
+            } else {
+                $newHelpDocId = wiki_db_create_help_doc($title, $status, $slug, $html);
+                wiki_admin_set_flash('success', 'Help doc created: ' . $title);
+                $redirectUrl = 'index.php?edit_doc=' . $newHelpDocId . '#edit-doc';
+            }
         } else {
             throw new RuntimeException('Unknown action.');
         }
@@ -183,8 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         wiki_admin_set_flash('danger', $exception->getMessage());
     }
 
-    header('Location: index.php');
-    exit;
+    wiki_admin_redirect($redirectUrl);
 }
 
 $csrfToken = wiki_admin_csrf_token();
@@ -193,6 +267,26 @@ $allFeatures = wiki_db_fetch_all_features();
 $recentReleases = wiki_db_fetch_recent_releases_for_admin(10);
 $recentFeatures = wiki_db_fetch_recent_features_for_admin(10);
 $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
+
+$editReleaseId = wiki_admin_positive_int_from_query('edit_release');
+$editFeatureId = wiki_admin_positive_int_from_query('edit_feature');
+$editDocId = wiki_admin_positive_int_from_query('edit_doc');
+
+$editingRelease = $editReleaseId > 0 ? wiki_db_fetch_release_by_id($editReleaseId) : null;
+$editingFeature = $editFeatureId > 0 ? wiki_db_fetch_feature_by_id($editFeatureId) : null;
+$editingDoc = $editDocId > 0 ? wiki_db_fetch_help_doc_by_id($editDocId) : null;
+$editingReleaseFeatureIds = $editingRelease !== null ? wiki_db_fetch_release_feature_ids((int) $editingRelease['id']) : [];
+
+$warnings = [];
+if ($editReleaseId > 0 && $editingRelease === null) {
+    $warnings[] = 'The selected release could not be found.';
+}
+if ($editFeatureId > 0 && $editingFeature === null) {
+    $warnings[] = 'The selected feature could not be found.';
+}
+if ($editDocId > 0 && $editingDoc === null) {
+    $warnings[] = 'The selected help doc could not be found.';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -215,7 +309,7 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
             <h1 class="h3 mb-1">Admin Portal</h1>
-            <p class="text-secondary mb-0">Create releases, features, help docs, and upload assets.</p>
+            <p class="text-secondary mb-0">Create and edit releases, features, help docs, and assets.</p>
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary btn-sm" href="../index.php">View Public Site</a>
@@ -227,11 +321,18 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
         </div>
     </div>
 
-    <p class="text-secondary mb-4">Signed in as <strong><?= htmlspecialchars((string) ($adminUser['display_name'] ?? 'Admin'), ENT_QUOTES, 'UTF-8') ?></strong> (<?= htmlspecialchars((string) ($adminUser['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)</p>
+    <p class="text-secondary mb-4">
+        Signed in as <strong><?= htmlspecialchars((string) ($adminUser['display_name'] ?? 'Admin'), ENT_QUOTES, 'UTF-8') ?></strong>
+        (<?= htmlspecialchars((string) ($adminUser['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)
+    </p>
 
     <?php if ($dbError !== null): ?>
         <div class="alert alert-danger"><?= htmlspecialchars($dbError, ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
+
+    <?php foreach ($warnings as $warning): ?>
+        <div class="alert alert-warning"><?= htmlspecialchars($warning, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endforeach; ?>
 
     <?php foreach ($flashes as $flash): ?>
         <?php
@@ -245,6 +346,186 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
 
     <div class="row g-4">
         <div class="col-lg-8">
+            <?php if ($editingRelease !== null): ?>
+                <div class="card border-0 shadow-sm mb-4" id="edit-release">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 mb-0">Edit Release #<?= (int) $editingRelease['id'] ?></h2>
+                            <a class="btn btn-sm btn-outline-secondary" href="index.php">Cancel Edit</a>
+                        </div>
+                        <form method="post" action="">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="action" value="edit_release">
+                            <input type="hidden" name="release_id" value="<?= (int) $editingRelease['id'] ?>">
+
+                            <div class="row g-3">
+                                <div class="col-md-7">
+                                    <label class="form-label">Header</label>
+                                    <input class="form-control" name="release_header" required value="<?= htmlspecialchars((string) ($editingRelease['header'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" name="release_status">
+                                        <option value="draft" <?= (($editingRelease['status'] ?? '') === 'draft') ? 'selected' : '' ?>>Draft</option>
+                                        <option value="publish" <?= (($editingRelease['status'] ?? '') === 'publish') ? 'selected' : '' ?>>Publish</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Slug</label>
+                                    <input class="form-control" name="release_slug" required value="<?= htmlspecialchars((string) ($editingRelease['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Release HTML Content</label>
+                                    <div class="editor-card wysiwyg">
+                                        <div class="editor-toolbar">
+                                            <button class="btn btn-sm btn-light" type="button" data-command="bold">Bold</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="italic">Italic</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="insertUnorderedList">Bullet</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="createLink">Link</button>
+                                        </div>
+                                        <div class="editor-area" contenteditable="true"></div>
+                                        <textarea class="d-none" name="release_html"><?= htmlspecialchars((string) ($editingRelease['html_content'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Attach Features</label>
+                                    <div class="feature-picker">
+                                        <?php if (count($allFeatures) === 0): ?>
+                                            <p class="text-secondary mb-0">No features yet. Create a feature first.</p>
+                                        <?php else: ?>
+                                            <?php foreach ($allFeatures as $feature): ?>
+                                                <?php
+                                                $featureId = (int) ($feature['id'] ?? 0);
+                                                $isSelected = in_array($featureId, $editingReleaseFeatureIds, true);
+                                                ?>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="feature_ids[]" value="<?= $featureId ?>" id="edit_release_feature_<?= $featureId ?>" <?= $isSelected ? 'checked' : '' ?>>
+                                                    <label class="form-check-label" for="edit_release_feature_<?= $featureId ?>">
+                                                        <?= htmlspecialchars((string) ($feature['header'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                                        <small class="text-secondary">(<?= htmlspecialchars((string) ($feature['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)</small>
+                                                    </label>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-primary" type="submit">Update Release</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($editingFeature !== null): ?>
+                <div class="card border-0 shadow-sm mb-4" id="edit-feature">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 mb-0">Edit Feature #<?= (int) $editingFeature['id'] ?></h2>
+                            <a class="btn btn-sm btn-outline-secondary" href="index.php">Cancel Edit</a>
+                        </div>
+                        <form method="post" action="" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="action" value="edit_feature">
+                            <input type="hidden" name="feature_id" value="<?= (int) $editingFeature['id'] ?>">
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label">Header</label>
+                                    <input class="form-control" name="feature_header" required value="<?= htmlspecialchars((string) ($editingFeature['header'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Slug</label>
+                                    <input class="form-control" name="feature_slug" required value="<?= htmlspecialchars((string) ($editingFeature['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Asset Path</label>
+                                    <input class="form-control" name="feature_asset_path" value="<?= htmlspecialchars((string) ($editingFeature['asset_path'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?php if (!empty($editingFeature['asset_path'])): ?>
+                                        <div class="form-text">Current: <?= htmlspecialchars((string) $editingFeature['asset_path'], ENT_QUOTES, 'UTF-8') ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Upload New Asset</label>
+                                    <input class="form-control" type="file" name="feature_asset_file">
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="1" id="feature_remove_asset" name="feature_remove_asset">
+                                        <label class="form-check-label" for="feature_remove_asset">Remove current asset</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Feature HTML Content</label>
+                                    <div class="editor-card wysiwyg">
+                                        <div class="editor-toolbar">
+                                            <button class="btn btn-sm btn-light" type="button" data-command="bold">Bold</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="italic">Italic</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="insertUnorderedList">Bullet</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="createLink">Link</button>
+                                        </div>
+                                        <div class="editor-area" contenteditable="true"></div>
+                                        <textarea class="d-none" name="feature_html"><?= htmlspecialchars((string) ($editingFeature['html_content'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-primary" type="submit">Update Feature</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($editingDoc !== null): ?>
+                <div class="card border-0 shadow-sm mb-4" id="edit-doc">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 mb-0">Edit Help Doc #<?= (int) $editingDoc['id'] ?></h2>
+                            <a class="btn btn-sm btn-outline-secondary" href="index.php">Cancel Edit</a>
+                        </div>
+                        <form method="post" action="">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="action" value="edit_help_doc">
+                            <input type="hidden" name="doc_id" value="<?= (int) $editingDoc['id'] ?>">
+                            <div class="row g-3">
+                                <div class="col-md-7">
+                                    <label class="form-label">Title</label>
+                                    <input class="form-control" name="doc_title" required value="<?= htmlspecialchars((string) ($editingDoc['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" name="doc_status">
+                                        <option value="draft" <?= (($editingDoc['status'] ?? '') === 'draft') ? 'selected' : '' ?>>Draft</option>
+                                        <option value="publish" <?= (($editingDoc['status'] ?? '') === 'publish') ? 'selected' : '' ?>>Publish</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Slug</label>
+                                    <input class="form-control" name="doc_slug" required value="<?= htmlspecialchars((string) ($editingDoc['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Doc HTML Content</label>
+                                    <div class="editor-card wysiwyg">
+                                        <div class="editor-toolbar">
+                                            <button class="btn btn-sm btn-light" type="button" data-command="bold">Bold</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="italic">Italic</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="insertUnorderedList">Bullet</button>
+                                            <button class="btn btn-sm btn-light" type="button" data-command="createLink">Link</button>
+                                        </div>
+                                        <div class="editor-area" contenteditable="true"></div>
+                                        <textarea class="d-none" name="doc_html"><?= htmlspecialchars((string) ($editingDoc['html_content'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-primary" type="submit">Update Help Doc</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body">
                     <h2 class="h5 mb-3">Create Release</h2>
@@ -270,7 +551,7 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Release HTML Content</label>
-                                <div class="editor-card wysiwyg" data-input-name="release_html">
+                                <div class="editor-card wysiwyg">
                                     <div class="editor-toolbar">
                                         <button class="btn btn-sm btn-light" type="button" data-command="bold">Bold</button>
                                         <button class="btn btn-sm btn-light" type="button" data-command="italic">Italic</button>
@@ -288,9 +569,10 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
                                         <p class="text-secondary mb-0">No features yet. Create a feature first.</p>
                                     <?php else: ?>
                                         <?php foreach ($allFeatures as $feature): ?>
+                                            <?php $featureId = (int) ($feature['id'] ?? 0); ?>
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="feature_ids[]" value="<?= (int) ($feature['id'] ?? 0) ?>" id="feature_<?= (int) ($feature['id'] ?? 0) ?>">
-                                                <label class="form-check-label" for="feature_<?= (int) ($feature['id'] ?? 0) ?>">
+                                                <input class="form-check-input" type="checkbox" name="feature_ids[]" value="<?= $featureId ?>" id="create_release_feature_<?= $featureId ?>">
+                                                <label class="form-check-label" for="create_release_feature_<?= $featureId ?>">
                                                     <?= htmlspecialchars((string) ($feature['header'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                                                     <small class="text-secondary">(<?= htmlspecialchars((string) ($feature['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)</small>
                                                 </label>
@@ -333,7 +615,7 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Feature HTML Content</label>
-                                <div class="editor-card wysiwyg" data-input-name="feature_html">
+                                <div class="editor-card wysiwyg">
                                     <div class="editor-toolbar">
                                         <button class="btn btn-sm btn-light" type="button" data-command="bold">Bold</button>
                                         <button class="btn btn-sm btn-light" type="button" data-command="italic">Italic</button>
@@ -376,7 +658,7 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Doc HTML Content</label>
-                                <div class="editor-card wysiwyg" data-input-name="doc_html">
+                                <div class="editor-card wysiwyg">
                                     <div class="editor-toolbar">
                                         <button class="btn btn-sm btn-light" type="button" data-command="bold">Bold</button>
                                         <button class="btn btn-sm btn-light" type="button" data-command="italic">Italic</button>
@@ -421,10 +703,22 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
                     <h2 class="h6 mb-3">Recent Releases</h2>
                     <ul class="list-group list-mini">
                         <?php foreach ($recentReleases as $release): ?>
+                            <?php
+                            $releaseId = (int) ($release['id'] ?? 0);
+                            $releaseSlug = (string) ($release['slug'] ?? '');
+                            $releaseStatus = (string) ($release['status'] ?? '');
+                            $releaseIsPublic = $releaseStatus === 'publish' && $releaseSlug !== '';
+                            ?>
                             <li class="list-group-item">
-                                <div class="small text-secondary"><?= htmlspecialchars((string) ($release['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="small text-secondary"><?= htmlspecialchars($releaseStatus, ENT_QUOTES, 'UTF-8') ?></div>
                                 <div><?= htmlspecialchars((string) ($release['header'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="small text-secondary"><?= htmlspecialchars((string) ($release['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="small text-secondary mb-2"><?= htmlspecialchars($releaseSlug, ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="d-flex gap-2">
+                                    <?php if ($releaseIsPublic): ?>
+                                        <a class="btn btn-sm btn-outline-secondary" href="../index.php?page=<?= urlencode('releases/' . $releaseSlug) ?>" target="_blank" rel="noopener">View</a>
+                                    <?php endif; ?>
+                                    <a class="btn btn-sm btn-outline-primary" href="index.php?edit_release=<?= $releaseId ?>#edit-release">Edit</a>
+                                </div>
                             </li>
                         <?php endforeach; ?>
                     </ul>
@@ -436,9 +730,11 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
                     <h2 class="h6 mb-3">Recent Features</h2>
                     <ul class="list-group list-mini">
                         <?php foreach ($recentFeatures as $feature): ?>
+                            <?php $featureId = (int) ($feature['id'] ?? 0); ?>
                             <li class="list-group-item">
                                 <div><?= htmlspecialchars((string) ($feature['header'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="small text-secondary"><?= htmlspecialchars((string) ($feature['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="small text-secondary mb-2"><?= htmlspecialchars((string) ($feature['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                <a class="btn btn-sm btn-outline-primary" href="index.php?edit_feature=<?= $featureId ?>#edit-feature">Edit</a>
                             </li>
                         <?php endforeach; ?>
                     </ul>
@@ -450,10 +746,22 @@ $recentDocs = wiki_db_fetch_recent_help_docs_for_admin(10);
                     <h2 class="h6 mb-3">Recent Help Docs</h2>
                     <ul class="list-group list-mini">
                         <?php foreach ($recentDocs as $doc): ?>
+                            <?php
+                            $docId = (int) ($doc['id'] ?? 0);
+                            $docSlug = (string) ($doc['slug'] ?? '');
+                            $docStatus = (string) ($doc['status'] ?? '');
+                            $docIsPublic = $docStatus === 'publish' && $docSlug !== '';
+                            ?>
                             <li class="list-group-item">
-                                <div class="small text-secondary"><?= htmlspecialchars((string) ($doc['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="small text-secondary"><?= htmlspecialchars($docStatus, ENT_QUOTES, 'UTF-8') ?></div>
                                 <div><?= htmlspecialchars((string) ($doc['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="small text-secondary"><?= htmlspecialchars((string) ($doc['slug'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="small text-secondary mb-2"><?= htmlspecialchars($docSlug, ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="d-flex gap-2">
+                                    <?php if ($docIsPublic): ?>
+                                        <a class="btn btn-sm btn-outline-secondary" href="../index.php?page=<?= urlencode('help/' . $docSlug) ?>" target="_blank" rel="noopener">View</a>
+                                    <?php endif; ?>
+                                    <a class="btn btn-sm btn-outline-primary" href="index.php?edit_doc=<?= $docId ?>#edit-doc">Edit</a>
+                                </div>
                             </li>
                         <?php endforeach; ?>
                     </ul>
@@ -468,6 +776,10 @@ document.querySelectorAll('.wysiwyg').forEach(function (wrapper) {
     var editor = wrapper.querySelector('.editor-area');
     var textarea = wrapper.querySelector('textarea');
     var form = wrapper.closest('form');
+
+    if (textarea && textarea.value.trim() !== '') {
+        editor.innerHTML = textarea.value;
+    }
 
     wrapper.querySelectorAll('[data-command]').forEach(function (button) {
         button.addEventListener('click', function () {

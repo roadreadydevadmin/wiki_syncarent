@@ -306,6 +306,89 @@ function wiki_db_fetch_all_features(): array
     return $statement->fetchAll();
 }
 
+function wiki_db_fetch_release_by_id(int $releaseId): ?array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $releaseId <= 0) {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        'SELECT id, header, status, slug, html_content, created_at, updated_at
+         FROM releases
+         WHERE id = :id
+         LIMIT 1'
+    );
+    $statement->execute(['id' => $releaseId]);
+    $release = $statement->fetch();
+
+    return is_array($release) ? $release : null;
+}
+
+function wiki_db_fetch_feature_by_id(int $featureId): ?array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $featureId <= 0) {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        'SELECT id, header, slug, html_content, asset_path, created_at, updated_at
+         FROM features
+         WHERE id = :id
+         LIMIT 1'
+    );
+    $statement->execute(['id' => $featureId]);
+    $feature = $statement->fetch();
+
+    return is_array($feature) ? $feature : null;
+}
+
+function wiki_db_fetch_help_doc_by_id(int $helpDocId): ?array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $helpDocId <= 0) {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        'SELECT id, title, status, slug, html_content, created_at, updated_at
+         FROM help_docs
+         WHERE id = :id
+         LIMIT 1'
+    );
+    $statement->execute(['id' => $helpDocId]);
+    $helpDoc = $statement->fetch();
+
+    return is_array($helpDoc) ? $helpDoc : null;
+}
+
+function wiki_db_fetch_release_feature_ids(int $releaseId): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $releaseId <= 0) {
+        return [];
+    }
+
+    $statement = $pdo->prepare(
+        'SELECT feature_id
+         FROM release_features
+         WHERE release_id = :release_id
+         ORDER BY display_order ASC, feature_id ASC'
+    );
+    $statement->execute(['release_id' => $releaseId]);
+
+    $featureIds = [];
+    foreach ($statement->fetchAll() as $row) {
+        $featureId = (int) ($row['feature_id'] ?? 0);
+        if ($featureId > 0) {
+            $featureIds[] = $featureId;
+        }
+    }
+
+    return $featureIds;
+}
+
 function wiki_db_create_feature(string $header, string $slug, string $htmlContent, ?string $assetPath): int
 {
     $pdo = wiki_db();
@@ -325,6 +408,30 @@ function wiki_db_create_feature(string $header, string $slug, string $htmlConten
     ]);
 
     return (int) $pdo->lastInsertId();
+}
+
+function wiki_db_update_feature(int $featureId, string $header, string $slug, string $htmlContent, ?string $assetPath): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $statement = $pdo->prepare(
+        'UPDATE features
+         SET header = :header,
+             slug = :slug,
+             html_content = :html_content,
+             asset_path = :asset_path
+         WHERE id = :id'
+    );
+    $statement->execute([
+        'id' => $featureId,
+        'header' => $header,
+        'slug' => $slug,
+        'html_content' => $htmlContent !== '' ? $htmlContent : null,
+        'asset_path' => $assetPath !== null && $assetPath !== '' ? $assetPath : null,
+    ]);
 }
 
 function wiki_db_create_release(string $header, string $status, string $slug, string $htmlContent): int
@@ -347,6 +454,31 @@ function wiki_db_create_release(string $header, string $status, string $slug, st
     ]);
 
     return (int) $pdo->lastInsertId();
+}
+
+function wiki_db_update_release(int $releaseId, string $header, string $status, string $slug, string $htmlContent): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $safeStatus = $status === 'publish' ? 'publish' : 'draft';
+    $statement = $pdo->prepare(
+        'UPDATE releases
+         SET header = :header,
+             status = :status,
+             slug = :slug,
+             html_content = :html_content
+         WHERE id = :id'
+    );
+    $statement->execute([
+        'id' => $releaseId,
+        'header' => $header,
+        'status' => $safeStatus,
+        'slug' => $slug,
+        'html_content' => $htmlContent !== '' ? $htmlContent : null,
+    ]);
 }
 
 function wiki_db_replace_release_features(int $releaseId, array $featureIds): void
@@ -411,6 +543,31 @@ function wiki_db_create_help_doc(string $title, string $status, string $slug, st
     ]);
 
     return (int) $pdo->lastInsertId();
+}
+
+function wiki_db_update_help_doc(int $helpDocId, string $title, string $status, string $slug, string $htmlContent): void
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('Database connection is unavailable.');
+    }
+
+    $safeStatus = $status === 'publish' ? 'publish' : 'draft';
+    $statement = $pdo->prepare(
+        'UPDATE help_docs
+         SET title = :title,
+             status = :status,
+             slug = :slug,
+             html_content = :html_content
+         WHERE id = :id'
+    );
+    $statement->execute([
+        'id' => $helpDocId,
+        'title' => $title,
+        'status' => $safeStatus,
+        'slug' => $slug,
+        'html_content' => $htmlContent !== '' ? $htmlContent : null,
+    ]);
 }
 
 function wiki_db_fetch_recent_releases_for_admin(int $limit = 20): array
