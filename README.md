@@ -1,6 +1,6 @@
 # Syncarent Wiki Starter
 
-Public-facing wiki starter built with PHP and Bootstrap, currently protected behind a password gate.
+Public-facing wiki built with PHP and Bootstrap, protected behind a password gate and now backed by MySQL for releases/features.
 
 ## Quick Start
 
@@ -16,6 +16,7 @@ Public-facing wiki starter built with PHP and Bootstrap, currently protected beh
 
 - The site entrypoint is `index.php`.
 - Site settings are loaded from `.env`.
+- Database setup runs automatically on page load from `database/schema.sql`.
 - The entire wiki is protected by an env-driven password (`WIKI_ACCESS_PASSWORD`).
 - All wiki pages live inside `content/`.
 - The left sidebar navigation is built automatically from folder + file structure in `content/`.
@@ -30,6 +31,22 @@ Public-facing wiki starter built with PHP and Bootstrap, currently protected beh
   - `WIKI_SITE_TAGLINE`
   - `WIKI_LOGO_URL`
   - `WIKI_ACCESS_PASSWORD`
+  - `WIKI_DB_HOST`
+  - `WIKI_DB_PORT`
+  - `WIKI_DB_NAME`
+  - `WIKI_DB_USER`
+  - `WIKI_DB_PASS`
+
+## Apache `.htaccess` DB Credentials
+
+- `.htaccess` now includes example `SetEnv` values for:
+  - `WIKI_DB_HOST`
+  - `WIKI_DB_PORT`
+  - `WIKI_DB_NAME`
+  - `WIKI_DB_USER`
+  - `WIKI_DB_PASS`
+- Replace those examples with your real credentials when running under Apache.
+- `.sql` files are blocked from direct web access.
 
 ## Add Pages
 
@@ -55,7 +72,9 @@ Public-facing wiki starter built with PHP and Bootstrap, currently protected beh
 
 ## Releases Section
 
-- Release pages belong in `content/releases/`.
-- Create one new file per release, for example:
-  - `content/releases/v1-0-1-bug-fixes.php`
-  - `content/releases/v1-1-0-new-features.php`
+- Releases are database-driven from three tables:
+  - `releases` (`header`, `status`, `slug`, `html_content`)
+  - `features` (`header`, `slug`, `html_content`, `asset_path`)
+  - `release_features` (joins features to releases with `display_order`)
+- The releases page is `content/releases/index.php` and renders published releases from SQL.
+- Feature assets (GIF/video/image files) should be stored under `assets/releases/` and referenced via `features.asset_path`.

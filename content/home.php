@@ -37,7 +37,7 @@ $pageMeta = [
             <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body">
                     <h2 class="h5">Releases</h2>
-                    <p class="mb-3">Publish release notes as one page per release.</p>
+                    <p class="mb-3">Publish release notes and feature details from the database.</p>
                     <a class="btn btn-outline-primary btn-sm" href="?page=releases/index">View Releases</a>
                 </div>
             </div>

@@ -24,6 +24,6 @@ $pageMeta = [
     </p>
     <ul>
         <li>`content/getting-started/*.php` appears under <strong>Getting Started</strong>.</li>
-        <li>`content/releases/*.php` appears under <strong>Releases</strong>.</li>
+        <li>`content/releases/index.php` appears under <strong>Releases</strong> and loads release data from the database.</li>
     </ul>
 </section>

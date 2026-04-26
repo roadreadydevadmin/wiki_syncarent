@@ -2,9 +2,11 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/includes/env.php';
+require_once __DIR__ . '/includes/database.php';
 require_once __DIR__ . '/includes/wiki.php';
 
 wiki_load_env(__DIR__ . '/.env');
+wiki_db_bootstrap(__DIR__ . '/database/schema.sql');
 
 $siteName = wiki_env('WIKI_SITE_NAME', 'Syncarent Wiki');
 $siteTagline = wiki_env('WIKI_SITE_TAGLINE', 'Public documentation and release notes');

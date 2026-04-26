@@ -1,5 +1,14 @@
 Options -Indexes
 
+<IfModule mod_env.c>
+    # Example database connection values. Replace with your real values.
+    SetEnv WIKI_DB_HOST localhost
+    SetEnv WIKI_DB_PORT 3306
+    SetEnv WIKI_DB_NAME syncarent_wiki
+    SetEnv WIKI_DB_USER syncarent_wiki
+    SetEnv WIKI_DB_PASS bWbh5pyHyM@^uy78
+</IfModule>
+
 <FilesMatch "^\.env(\.example)?$">
     <IfModule mod_authz_core.c>
         Require all denied
@@ -9,3 +18,11 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
+<FilesMatch "\.sql$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>

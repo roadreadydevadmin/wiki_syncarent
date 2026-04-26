@@ -17,7 +17,11 @@ $pageMeta = [
 ├── .htaccess
 ├── assets/
 │   ├── css/site.css
-│   └── img/logo.svg
+│   ├── img/logo.svg
+│   └── releases/
+├── database/
+│   ├── .htaccess
+│   └── schema.sql
 ├── content/
 │   ├── home.php
 │   ├── .htaccess
@@ -25,9 +29,9 @@ $pageMeta = [
 │   │   ├── overview.php
 │   │   └── structure.php
 │   └── releases/
-│       ├── index.php
-│       └── v1-0-0-initial-public-starter.php
+│       └── index.php
 ├── includes/
+│   ├── database.php
 │   ├── env.php
 │   ├── wiki.php
 │   └── .htaccess
@@ -38,7 +42,7 @@ $pageMeta = [
         The URL query `?page=section/page-name` maps directly to files under `content/`.
     </p>
     <p>
-        Example: `?page=releases/v1-0-0-initial-public-starter` maps to
-        `content/releases/v1-0-0-initial-public-starter.php`.
+        Releases are now database-driven from `database/schema.sql` and rendered at
+        `?page=releases/index`.
     </p>
 </section>
