@@ -76,5 +76,7 @@ Public-facing wiki built with PHP and Bootstrap, protected behind a password gat
   - `releases` (`header`, `status`, `slug`, `html_content`)
   - `features` (`header`, `slug`, `html_content`, `asset_path`)
   - `release_features` (joins features to releases with `display_order`)
-- The releases page is `content/releases/index.php` and renders published releases from SQL.
+- The left sidebar shows direct links to the 10 most recent published releases.
+- If there are more than 10, an `Older Releases` link appears and supports pagination.
+- Each release has its own URL format: `?page=releases/<release-slug>`.
 - Feature assets (GIF/video/image files) should be stored under `assets/releases/` and referenced via `features.asset_path`.

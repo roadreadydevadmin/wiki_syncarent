@@ -172,3 +172,77 @@ function wiki_split_sql_statements(string $sql): array
 
     return $statements;
 }
+
+function wiki_db_count_published_releases(): int
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return 0;
+    }
+
+    $statement = $pdo->query("SELECT COUNT(*) FROM releases WHERE status = 'publish'");
+    $count = $statement->fetchColumn();
+
+    return is_numeric($count) ? (int) $count : 0;
+}
+
+function wiki_db_fetch_published_releases(int $limit = 10, int $offset = 0): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $safeLimit = max(1, min(200, $limit));
+    $safeOffset = max(0, $offset);
+    $statement = $pdo->prepare(
+        "SELECT id, header, status, slug, html_content, created_at, updated_at
+         FROM releases
+         WHERE status = 'publish'
+         ORDER BY created_at DESC, id DESC
+         LIMIT :limit OFFSET :offset"
+    );
+    $statement->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
+    $statement->bindValue(':offset', $safeOffset, PDO::PARAM_INT);
+    $statement->execute();
+
+    return $statement->fetchAll();
+}
+
+function wiki_db_fetch_published_release_by_slug(string $slug): ?array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $slug === '') {
+        return null;
+    }
+
+    $statement = $pdo->prepare(
+        "SELECT id, header, status, slug, html_content, created_at, updated_at
+         FROM releases
+         WHERE status = 'publish' AND slug = :slug
+         LIMIT 1"
+    );
+    $statement->execute(['slug' => $slug]);
+    $release = $statement->fetch();
+
+    return is_array($release) ? $release : null;
+}
+
+function wiki_db_fetch_release_features(int $releaseId): array
+{
+    $pdo = wiki_db();
+    if (!$pdo instanceof PDO || $releaseId <= 0) {
+        return [];
+    }
+
+    $statement = $pdo->prepare(
+        'SELECT f.id, f.header, f.slug, f.html_content, f.asset_path, rf.display_order
+         FROM release_features rf
+         INNER JOIN features f ON f.id = rf.feature_id
+         WHERE rf.release_id = :release_id
+         ORDER BY rf.display_order ASC, f.id ASC'
+    );
+    $statement->execute(['release_id' => $releaseId]);
+
+    return $statement->fetchAll();
+}
