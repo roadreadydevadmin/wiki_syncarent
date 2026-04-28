@@ -10,16 +10,12 @@ $pageMeta = [
 ];
 ?>
 <section>
-    <p class="lead">
-        This wiki starter is set up for public use with section-based navigation, Bootstrap styling, and release history pages.
-    </p>
-
-    <div class="row g-3 mt-1">
+    <div class="row g-3">
         <div class="col-lg-4">
             <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body">
                     <h2 class="h5">Getting Started</h2>
-                    <p class="mb-3">Learn the layout and where content files live.</p>
+                    <p class="mb-3">Learn the layout and where to get started.</p>
                     <a class="btn btn-outline-primary btn-sm" href="?page=getting-started/overview">Open Guide</a>
                 </div>
             </div>
@@ -27,9 +23,9 @@ $pageMeta = [
         <div class="col-lg-4">
             <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body">
-                    <h2 class="h5">Project Structure</h2>
-                    <p class="mb-3">See how sections and pages map from folders.</p>
-                    <a class="btn btn-outline-primary btn-sm" href="?page=getting-started/structure">View Structure</a>
+                    <h2 class="h5">Help Docs</h2>
+                    <p class="mb-3">Browse how-to guides, troubleshooting steps, and common questions.</p>
+                    <a class="btn btn-outline-primary btn-sm" href="?page=getting-started/overview">Browse Docs</a>
                 </div>
             </div>
         </div>
@@ -37,7 +33,7 @@ $pageMeta = [
             <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body">
                     <h2 class="h5">Releases</h2>
-                    <p class="mb-3">Publish release notes and feature details from the database.</p>
+                    <p class="mb-3">Latest release information and updates.</p>
                     <a class="btn btn-outline-primary btn-sm" href="?page=releases/index">View Releases</a>
                 </div>
             </div>
