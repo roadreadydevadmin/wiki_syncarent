@@ -1,6 +1,6 @@
 # Syncarent Wiki Starter
 
-Public-facing wiki built with PHP and Bootstrap, protected behind a password gate and backed by MySQL for releases, features, help docs, and admin auth.
+Public-facing wiki built with PHP and Bootstrap, backed by MySQL for releases, features, help docs, and admin auth.
 
 ## Quick Start
 
@@ -9,15 +9,12 @@ Public-facing wiki built with PHP and Bootstrap, protected behind a password gat
    php -S localhost:8000
    ```
 2. Open `http://localhost:8000`.
-3. Enter the site password:
-   - `Password123`
 
 ## How It Works
 
 - The site entrypoint is `index.php`.
 - Site settings are loaded from `.env`.
 - Database setup runs automatically on page load from `database/schema.sql`.
-- The entire wiki is protected by an env-driven password (`WIKI_ACCESS_PASSWORD`).
 - All wiki pages live inside `content/`.
 - The left sidebar navigation is built automatically from folder + file structure in `content/`.
 - Each folder becomes a section in the sidebar.
@@ -30,7 +27,6 @@ Public-facing wiki built with PHP and Bootstrap, protected behind a password gat
   - `WIKI_SITE_NAME`
   - `WIKI_SITE_TAGLINE`
   - `WIKI_LOGO_URL`
-  - `WIKI_ACCESS_PASSWORD`
   - `WIKI_DB_HOST`
   - `WIKI_DB_PORT`
   - `WIKI_DB_NAME`
