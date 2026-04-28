@@ -10,7 +10,6 @@ $pageMeta = [
 ];
 ?>
 <section>
-    <h2>Admin Portal Getting Started and Initial Setup</h2>
 
     <h3>Scope</h3>
     <p>
